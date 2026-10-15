@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini Web Harness - Verification Cockpit</title>
+  <style>
+    :root {
+      --bg: #0f1013;
+      --card-bg: #18191f;
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover: rgba(66, 133, 244, 0.25);
+      --text: #e8eaed;
+      --text-secondary: #9aa0a6;
+      --text-muted: #5f6368;
+      --green: #10b981;
+      --green-glow: rgba(16, 185, 129, 0.2);
+      --amber: #f59e0b;
+      --amber-glow: rgba(245, 158, 11, 0.2);
+      --red: #ef4444;
+      --red-glow: rgba(239, 68, 68, 0.2);
+      --blue: #3b82f6;
+      --blue-glow: rgba(59, 130, 246, 0.2);
+      --purple: #8b5cf6;
+      --accent: linear-gradient(135deg, #4285f4, #8b5cf6);
+      --radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+      padding: 16px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    /* Scrollbar */
+    body::-webkit-scrollbar {
+      width: 6px;
+    }
+    body::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
+
+    /* Top Bar */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-sparkle {
+      width: 24px;
+      height: 24px;
+      background: var(--accent);
+      mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 0L14.7 9.3L24 12L14.7 14.7L12 24L9.3 14.7L0 12L9.3 9.3L12 0Z'/%3E%3C/svg%3E") no-repeat center / contain;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 0L14.7 9.3L24 12L14.7 14.7L12 24L9.3 14.7L0 12L9.3 9.3L12 0Z'/%3E%3C/svg%3E") no-repeat center / contain;
+      animation: pulse 3s infinite ease-in-out;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.08); opacity: 1; }
+    }
+    .title-group h1 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .badge-sub {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(66, 133, 244, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(66, 133, 244, 0.3);
+      letter-spacing: 0.5px;
+    }
+    .btn-icon {
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--text-secondary);
+      border-radius: 8px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-icon:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .btn-icon svg {
+      width: 14px;
+      height: 14px;
+      transition: transform 0.4s ease;
+    }
+    .btn-icon.spinning svg {
+      transform: rotate(360deg);
+    }
+
+    /* Master Status Banner */
+    .master-banner {
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.03) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.3s ease;
+    }
+    .master-banner.warning {
+      background: linear-gradient(180deg, rgba(245, 158, 11, 0.12) 0%, rgba(245, 158, 11, 0.03) 100%);
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+    .master-banner.error {
+      background: linear-gradient(180deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.03) 100%);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+    .status-orb {
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--green);
+    }
+    .master-banner.warning .status-orb {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--amber);
+    }
+    .master-banner.error .status-orb {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--red);
+    }
+    .master-text {
+      flex: 1;
+    }
+    .master-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .master-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 1px;
+    }
+
+    /* Cards Stack */
+    .cards-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      transition: border-color 0.2s ease;
+    }
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .card-title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-icon {
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .status-pill {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .status-pill.online {
+      background: var(--green-glow);
+      color: var(--green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .status-pill.offline {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .status-pill.warning {
+      background: var(--amber-glow);
+      color: var(--amber);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 12px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+    .detail-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 6px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .detail-label {
+      color: var(--text-muted);
+    }
+    .detail-val {
+      font-weight: 500;
+      color: var(--text);
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .btn:active {
+      transform: translateY(1px);
+    }
+    .btn-primary {
+      background: var(--accent);
+      border: none;
+      color: #ffffff;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(66, 133, 244, 0.3);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 3px 12px rgba(66, 133, 244, 0.45);
+      filter: brightness(1.08);
+    }
+
+    /* Model & Reasoning Controls */
+    .thinking-btn-group {
+      display: flex;
+      gap: 5px;
+    }
+    .thinking-pill {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 10.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .thinking-pill:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text);
+    }
+    .thinking-pill.active {
+      background: rgba(66, 133, 244, 0.2);
+      border-color: rgba(66, 133, 244, 0.6);
+      color: #60a5fa;
+      font-weight: 600;
+    }
+    .model-select {
+      background: #121316;
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      outline: none;
+      cursor: pointer;
+    }
+    .model-select:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Probe Diagnostic Box */
+    .probe-card {
+      background: linear-gradient(180deg, #18191f 0%, #131418 100%);
+      border: 1px solid var(--card-border);
+    }
+    .probe-result {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-family: Consolas, "Liberation Mono", Menlo, Courier, monospace;
+      font-size: 10.5px;
+      background: #090a0c;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--text-secondary);
+      display: none;
+      word-break: break-all;
+    }
+    .probe-result.active {
+      display: block;
+    }
+    .probe-result.success {
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.3);
+      background: rgba(16, 185, 129, 0.05);
+    }
+    .probe-result.failure {
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.3);
+      background: rgba(239, 68, 68, 0.05);
+    }
+
+    /* Recent Activity */
+    .activity-row {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: 11px;
+    }
+    .activity-meta {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 10px;
+    }
+    .activity-path {
+      font-family: Consolas, monospace;
+      color: #60a5fa;
+      font-size: 10.5px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .toggle-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .toggle-group input[type="checkbox"] {
+      cursor: pointer;
+      accent-color: var(--blue);
+    }
+    .footer-port {
+      font-family: monospace;
+      font-size: 10px;
+    }
+
+    /* Account Pool Grid */
+    .account-slots-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .account-slot-chip {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 6px 4px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      user-select: none;
+    }
+    .account-slot-chip:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+    .account-slot-chip.active {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.45);
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+    }
+    .account-slot-chip.rate-limited {
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.45);
+    }
+    .slot-num {
+      font-weight: 700;
+      font-size: 11px;
+      color: var(--text);
+    }
+    .slot-dot-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .slot-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #64748b;
+    }
+    .account-slot-chip.active .slot-dot {
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+    }
+    .account-slot-chip.rate-limited .slot-dot {
+      background: var(--amber);
+      box-shadow: 0 0 6px var(--amber);
+    }
+    .slot-sub {
+      font-size: 8.5px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 58px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo-sparkle"></div>
+      <div class="title-group">
+        <h1>Gemini Web <span class="badge-sub">VERIFY</span></h1>
+      </div>
+    </div>
+    <button id="btnRefresh" class="btn-icon" title="Refresh Status">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Master Status Banner -->
+  <div id="masterBanner" class="master-banner">
+    <div id="masterOrb" class="status-orb">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </div>
+    <div class="master-text">
+      <div id="masterTitle" class="master-title">Checking System State...</div>
+      <div id="masterDesc" class="master-desc">Querying Chrome CDP and authentication session</div>
+    </div>
+  </div>
+
+  <!-- Cards Stack -->
+  <div class="cards-stack">
+
+    <!-- Card 1: Google Auth & Token -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title-group">
+          <span class="card-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </span>
+          <span class="card-title">Google Authentication</span>
+        </div>
+        <div id="authPill" class="status-pill offline">
+          <span class="pill-dot"></span>
+          <span id="authPillText">Checking</span>
+        </div>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <span class="detail-label">CSRF Token:</span>
+          <span id="lblCsrf" class="detail-val">—</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Active Cookies:</span>
+          <span id="lblCookies" class="detail-val">—</span>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button id="btnSignIn" class="btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>
+          </svg>
+          Sign In / Refresh Auth
+        </button>
+      </div>
+    </div>
+
+    <!-- Card 2: Chrome CDP 9222 Bridge -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title-group">
+          <span class="card-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="4"/>
+              <line x1="21.17" y1="8" x2="12" y2="8"/>
+              <line x1="3.95" y1="6.06" x2="8.54" y2="14"/>
+              <line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
+            </svg>
+          </span>
+          <span class="card-title">Chrome CDP Engine</span>
+        </div>
+        <div id="cdpPill" class="status-pill offline">
+          <span class="pill-dot"></span>
+          <span id="cdpPillText">Checking</span>
+        </div>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <span class="detail-label">CDP Port:</span>
+          <span id="lblPort" class="detail-val">9222</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Gemini Tab:</span>
+          <span id="lblGeminiTab" class="detail-val">—</span>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button id="btnLaunchChrome" class="btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          Launch Chrome
+        </button>
+        <button id="btnFocusChrome" class="btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+          Focus Tab
+        </button>
+      </div>
+    </div>
+
+    <!-- Card 2.5: Model & Reasoning Engine -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title-group">
+          <span class="card-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2a10 10 0 1 0 10 10H12V2z"/>
+              <path d="M12 12L2.1 12.5"/>
+              <path d="M12 12l4.5 8"/>
+            </svg>
+          </span>
+          <span class="card-title">Model & Reasoning Engine</span>
+        </div>
+        <div id="modelPill" class="status-pill online">
+          <span class="pill-dot"></span>
+          <span id="modelPillText">Argon High</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 11px; color: var(--text-muted);">Frontier Model:</span>
+          <select id="selModel" class="model-select">
+            <option value="argon" selected>Gemini 4 Argon (Flagship)</option>
+            <option value="pro">Gemini 3.1 Pro (Advanced)</option>
+            <option value="flash">Gemini 3.8 Flash (Balanced)</option>
+            <option value="flash-lite">Gemini 3.5 Flash-Lite (Fastest)</option>
+          </select>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 11px; color: var(--text-muted);">Thinking Effort:</span>
+          <div class="thinking-btn-group" id="thinkingPills">
+            <button class="thinking-pill" data-level="low">Low</button>
+            <button class="thinking-pill" data-level="medium">Medium</button>
+            <button class="thinking-pill active" data-level="high">High</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2.8: Account Pool & Failover (5 Slots) -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title-group">
+          <span class="card-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </span>
+          <span class="card-title">Account Pool & Failover</span>
+        </div>
+        <div id="poolPill" class="status-pill online">
+          <span class="pill-dot"></span>
+          <span id="poolPillText">5 Accounts</span>
+        </div>
+      </div>
+      <div style="font-size: 10.5px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
+        <span>Multi-Account Pool:</span>
+        <span id="lblActiveAccount" style="color: var(--green); font-weight: 600;">Slot 0</span>
+      </div>
+      <div id="accountSlotsContainer" class="account-slots-grid">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+
+    <!-- Card 3: 1-Click Self-Check Diagnostic Probe -->
+    <div class="card probe-card">
+      <div class="card-head">
+        <div class="card-title-group">
+          <span class="card-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+          </span>
+          <span class="card-title">Diagnostic Self-Check</span>
+        </div>
+      </div>
+      <button id="btnProbe" class="btn btn-primary" style="width: 100%;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        Verify /gemini-web Readiness
+      </button>
+      <div id="probeResult" class="probe-result"></div>
+    </div>
+
+    <!-- Card 4: Recent Activity Ticker -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title-group">
+          <span class="card-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </span>
+          <span class="card-title">Recent Antigravity Task</span>
+        </div>
+        <span id="lblActivityAge" style="font-size: 10px; color: var(--text-muted);">—</span>
+      </div>
+      <div class="activity-row">
+        <div class="activity-meta">
+          <span>Conversation ID:</span>
+          <span id="lblActivityConv" style="color: var(--text);">None</span>
+        </div>
+        <div id="lblActivityWorkspace" class="activity-path">—</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <label class="toggle-group" title="Automatically launch Chrome with remote debugging when this harness opens">
+      <input type="checkbox" id="chkAutoStart">
+      <span>Auto-start Chrome</span>
+    </label>
+    <div class="footer-port">Port 8046 • CDP 9222</div>
+  </div>
+
+  <script>
+    const { ipcRenderer, shell } = require("electron");
+
+    const masterBanner = document.getElementById("masterBanner");
+    const masterOrb = document.getElementById("masterOrb");
+    const masterTitle = document.getElementById("masterTitle");
+    const masterDesc = document.getElementById("masterDesc");
+
+    const authPill = document.getElementById("authPill");
+    const authPillText = document.getElementById("authPillText");
+    const lblCsrf = document.getElementById("lblCsrf");
+    const lblCookies = document.getElementById("lblCookies");
+
+    const cdpPill = document.getElementById("cdpPill");
+    const cdpPillText = document.getElementById("cdpPillText");
+    const lblPort = document.getElementById("lblPort");
+    const lblGeminiTab = document.getElementById("lblGeminiTab");
+
+    const btnRefresh = document.getElementById("btnRefresh");
+    const btnSignIn = document.getElementById("btnSignIn");
+    const btnLaunchChrome = document.getElementById("btnLaunchChrome");
+    const btnFocusChrome = document.getElementById("btnFocusChrome");
+    const btnProbe = document.getElementById("btnProbe");
+    const probeResult = document.getElementById("probeResult");
+
+    const modelPill = document.getElementById("modelPill");
+    const modelPillText = document.getElementById("modelPillText");
+    const selModel = document.getElementById("selModel");
+    const thinkingPills = document.querySelectorAll("#thinkingPills .thinking-pill");
+
+    const poolPillText = document.getElementById("poolPillText");
+    const lblActiveAccount = document.getElementById("lblActiveAccount");
+    const accountSlotsContainer = document.getElementById("accountSlotsContainer");
+
+    const lblActivityAge = document.getElementById("lblActivityAge");
+    const lblActivityConv = document.getElementById("lblActivityConv");
+    const lblActivityWorkspace = document.getElementById("lblActivityWorkspace");
+    const chkAutoStart = document.getElementById("chkAutoStart");
+
+    let isProbing = false;
+
+    function formatRelativeTime(timestamp) {
+      if (!timestamp) return "Never";
+      const diffSec = Math.floor((Date.now() - timestamp) / 1000);
+      if (diffSec < 60) return "Just now";
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return `${diffHr}h ago`;
+      return `${Math.floor(diffHr / 24)}d ago`;
+    }
+
+    async function updateStatus() {
+      try {
+        const data = await ipcRenderer.invoke("get-verification-data");
+        renderData(data);
+      } catch (err) {
+        console.error("Failed to fetch verification data:", err);
+      }
+    }
+
+    function renderAccountSlots(pool) {
+      if (!pool || !Array.isArray(pool.slots) || !accountSlotsContainer) return;
+      accountSlotsContainer.innerHTML = "";
+
+      let readyCount = 0;
+
+      pool.slots.forEach((s) => {
+        const chip = document.createElement("div");
+        chip.className = "account-slot-chip" + (s.isActive ? " active" : "") + (s.rateLimited ? " rate-limited" : "");
+        chip.title = `Slot #${s.slot} (${s.email || s.url})\n${s.rateLimited ? "Cooldown: " + (s.resetTimeText || "Rate limited") : "Ready for compute"}\nClick to switch to this account.`;
+
+        let subText = s.rateLimited ? (s.resetTimeText || "Cooldown") : (s.email ? s.email.split("@")[0] : `/u/${s.slot}`);
+
+        chip.innerHTML = `
+          <div class="slot-dot-row">
+            <span class="slot-dot"></span>
+            <span class="slot-num">#${s.slot}</span>
+          </div>
+          <span class="slot-sub" title="${s.email || ''}">${subText}</span>
+        `;
+
+        chip.addEventListener("click", async () => {
+          chip.style.opacity = "0.6";
+          try {
+            await ipcRenderer.invoke("switch-account-slot", s.slot);
+            await updateStatus();
+          } finally {
+            chip.style.opacity = "1";
+          }
+        });
+
+        accountSlotsContainer.appendChild(chip);
+
+        if (!s.rateLimited) readyCount++;
+      });
+
+      const activeSlot = pool.slots.find((s) => s.isActive);
+      if (activeSlot && lblActiveAccount) {
+        lblActiveAccount.textContent = `Slot #${activeSlot.slot}${activeSlot.email ? " (" + activeSlot.email.split("@")[0] + ")" : ""}`;
+      }
+      if (poolPillText) {
+        poolPillText.textContent = `${readyCount}/5 Ready`;
+      }
+    }
+
+    function renderData(data) {
+      // 1. Google Authentication Card
+      if (data.auth && data.auth.isLoggedIn) {
+        authPill.className = "status-pill online";
+        authPillText.textContent = "Authenticated";
+        lblCsrf.textContent = "SNlM0e (Valid)";
+        lblCsrf.style.color = "var(--green)";
+        lblCookies.textContent = `${data.auth.cookiesCount} active`;
+      } else {
+        authPill.className = "status-pill warning";
+        authPillText.textContent = "Sign-In Required";
+        lblCsrf.textContent = "Missing";
+        lblCsrf.style.color = "var(--amber)";
+        lblCookies.textContent = `${data.auth ? data.auth.cookiesCount : 0} active`;
+      }
+
+      // 2. Chrome CDP Card
+      if (data.cdp && data.cdp.running) {
+        cdpPill.className = "status-pill online";
+        cdpPillText.textContent = "Port 9222 Active";
+        lblPort.textContent = "9222 (Connected)";
+        lblPort.style.color = "var(--green)";
+
+        if (data.cdp.geminiTab && data.cdp.geminiTab.found) {
+          lblGeminiTab.textContent = "Gemini App Active";
+          lblGeminiTab.style.color = "var(--green)";
+        } else {
+          lblGeminiTab.textContent = "Tab Not Detected";
+          lblGeminiTab.style.color = "var(--amber)";
+        }
+      } else {
+        cdpPill.className = "status-pill offline";
+        cdpPillText.textContent = "Offline";
+        lblPort.textContent = "9222 (Offline)";
+        lblPort.style.color = "var(--text-muted)";
+        lblGeminiTab.textContent = "Offline";
+        lblGeminiTab.style.color = "var(--text-muted)";
+      }
+
+      // 2.5 Model & Reasoning Controls
+      if (data.selectedModel) {
+        const m = data.selectedModel.toLowerCase();
+        if (m.includes("argon")) selModel.value = "argon";
+        else if (m.includes("pro")) selModel.value = "pro";
+        else if (m.includes("flash-lite") || m.includes("lite")) selModel.value = "flash-lite";
+        else if (m.includes("flash")) selModel.value = "flash";
+      }
+      if (data.thinkingLevel) {
+        thinkingPills.forEach((btn) => {
+          if (btn.getAttribute("data-level") === data.thinkingLevel) {
+            btn.classList.add("active");
+          } else {
+            btn.classList.remove("active");
+          }
+        });
+      }
+      const modelDisplayName = selModel.options[selModel.selectedIndex]?.text.split(" ")[1] || "Argon";
+      const thCapital = (data.thinkingLevel || "high").charAt(0).toUpperCase() + (data.thinkingLevel || "high").slice(1);
+      modelPillText.textContent = `${modelDisplayName} ${thCapital}`;
+
+      // 2.8 Account Pool & Failover
+      if (data.accountPool) {
+        renderAccountSlots(data.accountPool);
+      }
+
+      // 3. Master Banner state
+      const isAuthOk = data.auth && data.auth.isLoggedIn;
+      const isCdpOk = data.cdp && data.cdp.running && data.cdp.geminiTab && data.cdp.geminiTab.found;
+
+      if (isAuthOk && isCdpOk) {
+        masterBanner.className = "master-banner";
+        masterOrb.innerHTML = `
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        `;
+        masterTitle.textContent = "Ready for Antigravity";
+        masterDesc.textContent = "Type /gemini-web in chat to run autonomous tasks.";
+      } else if (!data.cdp || !data.cdp.running) {
+        masterBanner.className = "master-banner warning";
+        masterOrb.innerHTML = `
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        `;
+        masterTitle.textContent = "Chrome CDP Offline";
+        masterDesc.textContent = "Click 'Launch Chrome' below to start the browser engine.";
+      } else if (!isAuthOk) {
+        masterBanner.className = "master-banner error";
+        masterOrb.innerHTML = `
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="15" y1="9" x2="9" y2="15"></line>
+            <line x1="9" y1="9" x2="15" y2="15"></line>
+          </svg>
+        `;
+        masterTitle.textContent = "Google Session Missing";
+        masterDesc.textContent = "Click 'Sign In' to authenticate with your Google account.";
+      } else {
+        masterBanner.className = "master-banner warning";
+        masterTitle.textContent = "Gemini Tab Not Open";
+        masterDesc.textContent = "Navigate to gemini.google.com in your Chrome window.";
+      }
+
+      // 4. Activity
+      if (data.latestSession) {
+        const s = data.latestSession;
+        lblActivityAge.textContent = formatRelativeTime(s.lastUpdated);
+        lblActivityConv.textContent = (s.antigravityConvId || "default").substring(0, 18) + (s.antigravityConvId?.length > 18 ? "..." : "");
+        lblActivityWorkspace.textContent = s.workspaceDir || "—";
+      } else {
+        lblActivityAge.textContent = "No runs yet";
+        lblActivityConv.textContent = "None";
+        lblActivityWorkspace.textContent = "Waiting for first /gemini-web command";
+      }
+
+      // 5. Settings
+      chkAutoStart.checked = Boolean(data.autoStartChrome);
+    }
+
+    // Model & Reasoning Selection Handler
+    async function applyModelAndThinking(model, thinking) {
+      modelPillText.textContent = "Updating...";
+      try {
+        const res = await ipcRenderer.invoke("set-model-and-thinking", { model, thinking });
+        if (res && res.activeModel) {
+          modelPillText.textContent = res.activeModel.replace(/\n+/g, " ");
+        } else {
+          const selText = selModel.options[selModel.selectedIndex]?.text.split(" ")[1] || "Argon";
+          const thCap = thinking.charAt(0).toUpperCase() + thinking.slice(1);
+          modelPillText.textContent = `${selText} ${thCap}`;
+        }
+      } catch (err) {
+        console.error("Failed to update model in Chrome:", err);
+      }
+      await updateStatus();
+    }
+
+    selModel.addEventListener("change", () => {
+      const activePill = document.querySelector("#thinkingPills .thinking-pill.active");
+      const thinking = activePill ? activePill.getAttribute("data-level") : "high";
+      applyModelAndThinking(selModel.value, thinking);
+    });
+
+    thinkingPills.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        thinkingPills.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        applyModelAndThinking(selModel.value, btn.getAttribute("data-level"));
+      });
+    });
+
+    // Refresh action
+    btnRefresh.addEventListener("click", async () => {
+      btnRefresh.classList.add("spinning");
+      await updateStatus();
+      setTimeout(() => btnRefresh.classList.remove("spinning"), 500);
+    });
+
+    // Launch Chrome
+    btnLaunchChrome.addEventListener("click", async () => {
+      btnLaunchChrome.textContent = "Launching...";
+      await ipcRenderer.invoke("launch-chrome");
+      setTimeout(async () => {
+        btnLaunchChrome.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg> Launch Chrome
+        `;
+        await updateStatus();
+      }, 1500);
+    });
+
+    // Focus Chrome
+    btnFocusChrome.addEventListener("click", async () => {
+      await ipcRenderer.invoke("bring-chrome-front");
+    });
+
+    // Sign In / Re-auth
+    btnSignIn.addEventListener("click", async () => {
+      btnSignIn.textContent = "Opening Sign-In...";
+      await ipcRenderer.invoke("launch-chrome-login");
+      btnSignIn.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>
+        </svg> Sign In / Refresh Auth
+      `;
+      await updateStatus();
+    });
+
+    // 1-Click Verification Diagnostic Probe
+    btnProbe.addEventListener("click", async () => {
+      if (isProbing) return;
+      isProbing = true;
+      btnProbe.innerHTML = `
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="spinning">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+        </svg>
+        Probing Chrome CDP...
+      `;
+      probeResult.className = "probe-result active";
+      probeResult.textContent = "Connecting to Chrome DevTools Protocol & querying Quill DOM...";
+
+      try {
+        const res = await ipcRenderer.invoke("run-verification-probe");
+        if (res.success) {
+          probeResult.className = "probe-result active success";
+          probeResult.innerHTML = `
+            <strong>✓ VERIFICATION PASSED (${res.latencyMs}ms)</strong><br>
+            • Quill Prompt Editor: ${res.hasEditor ? "Detected & Ready" : "Standby"}<br>
+            • Gemini URL: ${res.url || "gemini.google.com/app"}<br>
+            • Result: Ready for /gemini-web pair programming!
+          `;
+        } else {
+          probeResult.className = "probe-result active failure";
+          probeResult.innerHTML = `
+            <strong>✕ VERIFICATION FAILED (${res.latencyMs}ms)</strong><br>
+            ${res.message}
+          `;
+        }
+      } catch (e) {
+        probeResult.className = "probe-result active failure";
+        probeResult.textContent = "Error: " + e.message;
+      } finally {
+        isProbing = false;
+        btnProbe.innerHTML = `
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          Verify /gemini-web Readiness
+        `;
+        await updateStatus();
+      }
+    });
+
+    // Auto-start Chrome checkbox
+    chkAutoStart.addEventListener("change", async () => {
+      await ipcRenderer.invoke("toggle-auto-start", chkAutoStart.checked);
+    });
+
+    // Initial load & periodic poll
+    updateStatus();
+    setInterval(updateStatus, 3500);
+
+    ipcRenderer.on("auth-refreshed", () => {
+      updateStatus();
+    });
+  </script>
+</body>
+</html>

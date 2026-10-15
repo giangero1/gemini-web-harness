@@ -1,0 +1,28 @@
+{
+  "name": "gemini-web-harness",
+  "version": "1.0.0",
+  "description": "Desktop harness bridging Google Gemini Web (gemini.google.com) to Google Antigravity with local tool execution.",
+  "main": "dist/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').mkdirSync('dist/ui', {recursive:true}); require('fs').copyFileSync('src/ui/index.html', 'dist/ui/index.html')\"",
+    "start": "npm run build && electron .",
+    "dev": "electron -r ts-node/register src/main.ts",
+    "setup-chrome": "node scripts/download_chrome.js",
+    "test": "node --test tests/*.test.js || ts-node tests/response-parser.test.ts"
+  },
+  "dependencies": {
+    "@types/ws": "^8.18.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.1",
+    "electron": "^33.2.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}

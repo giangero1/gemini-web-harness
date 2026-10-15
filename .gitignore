@@ -1,0 +1,45 @@
+# ==========================================
+# GEMINI WEB HARNESS — ZERO-LEAK SECURITY SHIELD
+# ==========================================
+
+# 1. Credentials, Tokens & Active Sessions (NEVER COMMIT)
+.session.json
+.account-pool.json
+.session-mapping.json
+.conversations.json
+.harness-settings.json
+.custom-demos.json
+*.session.json
+*.credentials.json
+.env
+.env.*
+
+# 2. Chrome Profiles, Cache, & Local Browser Binaries
+.chrome-profile/
+.chrome-bin/
+chrome-win64/
+*.log
+
+# 3. Code Backups, Dumps & Scratch Prompts
+.argon_backups/
+omni_project_pack.txt
+package_omni_context.py
+prompt_*.txt
+test_folder_prompt.txt
+scripts/test_rotator.js
+scripts/check_accounts.js
+
+# 4. Node Dependencies & Build Artifacts
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 5. OS & Editor Artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.tmp

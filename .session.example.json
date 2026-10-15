@@ -1,0 +1,29 @@
+{
+  "snlm0e": "YOUR_SNLM0E_CSRF_TOKEN_HERE",
+  "cookies": [
+    {
+      "name": "SID",
+      "value": "YOUR_SID_COOKIE_HERE",
+      "domain": ".google.com",
+      "path": "/"
+    },
+    {
+      "name": "HSID",
+      "value": "YOUR_HSID_COOKIE_HERE",
+      "domain": ".google.com",
+      "path": "/"
+    },
+    {
+      "name": "SSID",
+      "value": "YOUR_SSID_COOKIE_HERE",
+      "domain": ".google.com",
+      "path": "/"
+    },
+    {
+      "name": "__Secure-1PSID",
+      "value": "YOUR_SECURE_1PSID_COOKIE_HERE",
+      "domain": ".google.com",
+      "path": "/"
+    }
+  ]
+}
