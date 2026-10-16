@@ -542,7 +542,8 @@ export class AgentLoop {
             const optText = modelOption.innerText || '';
             const isRateLimited = optText.toLowerCase().includes('limit resets') ||
                                   modelOption.getAttribute('aria-disabled') === 'true' ||
-                                  (modelOption as any).disabled === true;
+                                  modelOption.hasAttribute('disabled') ||
+                                  Boolean((modelOption as any).disabled);
 
             if (isRateLimited && !targetM.includes('flash-lite')) {
               document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -555,6 +556,8 @@ export class AgentLoop {
 
             modelOption.click();
             await new Promise(r => setTimeout(r, 500));
+          } else {
+            document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
           }
 
           if (!targetM.includes('flash-lite')) {
@@ -583,6 +586,21 @@ export class AgentLoop {
             } else {
               document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
             }
+          }
+
+          // Post-selection verification to ensure model switched and did not silently stay on fallback
+          const finalBtnText = (modeBtn.innerText || '').toLowerCase();
+          const finalMatches = targetM.includes('argon') ? finalBtnText.includes('argon') :
+                               targetM.includes('pro') ? finalBtnText.includes('pro') :
+                               targetM.includes('flash-lite') || targetM.includes('lite') ? finalBtnText.includes('lite') :
+                               targetM.includes('flash') ? (finalBtnText.includes('flash') && !finalBtnText.includes('lite')) : true;
+
+          if (!finalMatches && !targetM.includes('flash-lite')) {
+            return {
+              rateLimited: true,
+              resetInfo: "Target model \"" + targetModel + "\" could not be activated (active: \"" + modeBtn.innerText.trim() + "\")",
+              text: modeBtn.innerText.trim()
+            };
           }
 
           return { success: true, text: modeBtn.innerText.trim() };

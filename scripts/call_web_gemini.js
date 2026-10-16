@@ -243,7 +243,9 @@ async function ensureModelSelectedInTab(ws, targetModel = "argon", targetThinkin
         if (modelOption) {
           const optText = modelOption.innerText || '';
           const isRateLimited = optText.toLowerCase().includes('limit resets') ||
-                                modelOption.getAttribute('aria-disabled') === 'true';
+                                modelOption.getAttribute('aria-disabled') === 'true' ||
+                                modelOption.hasAttribute('disabled') ||
+                                Boolean(modelOption.disabled);
 
           if (isRateLimited && !targetM.includes('flash-lite')) {
             document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -256,6 +258,8 @@ async function ensureModelSelectedInTab(ws, targetModel = "argon", targetThinkin
 
           modelOption.click();
           await new Promise(r => setTimeout(r, 500));
+        } else {
+          document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         }
 
         if (!targetM.includes('flash-lite')) {
@@ -284,6 +288,21 @@ async function ensureModelSelectedInTab(ws, targetModel = "argon", targetThinkin
           } else {
             document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
           }
+        }
+
+        // Post-selection verification to ensure model switched and did not silently stay on fallback
+        const finalBtnText = (modeBtn.innerText || '').toLowerCase();
+        const finalMatches = targetM.includes('argon') ? finalBtnText.includes('argon') :
+                             targetM.includes('pro') ? finalBtnText.includes('pro') :
+                             targetM.includes('flash-lite') || targetM.includes('lite') ? finalBtnText.includes('lite') :
+                             targetM.includes('flash') ? (finalBtnText.includes('flash') && !finalBtnText.includes('lite')) : true;
+
+        if (!finalMatches && !targetM.includes('flash-lite')) {
+          return {
+            rateLimited: true,
+            resetInfo: "Target model \"" + targetModel + "\" could not be activated (active: \"" + modeBtn.innerText.trim() + "\")",
+            text: modeBtn.innerText.trim()
+          };
         }
 
         return { success: true, text: modeBtn.innerText.trim() };
@@ -511,6 +530,17 @@ async function main() {
     console.log("Status:          🟢 AUTHENTICATED & READY");
     console.log("=".repeat(60));
     return;
+  }
+
+  if (options.promptFile) {
+    if (!fs.existsSync(options.promptFile)) {
+      console.error(`[Error] Prompt file not found: ${options.promptFile}`);
+      process.exit(1);
+    }
+    options.prompt = fs.readFileSync(options.promptFile, "utf8");
+    if (!options.instruction) {
+      options.instruction = options.prompt;
+    }
   }
 
   let prompt = options.prompt;
