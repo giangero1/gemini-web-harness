@@ -22,6 +22,8 @@ chrome-win64/
 
 # 3. Code Backups, Dumps & Scratch Prompts
 .argon_backups/
+.hydrogen_backups/
+.*_backups/
 omni_project_pack.txt
 package_omni_context.py
 prompt_*.txt

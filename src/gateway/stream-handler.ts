@@ -35,10 +35,10 @@ export class StreamHandler {
 
       const parser = new ResponseParser();
 
-      // 2. Execute via Chrome CDP (Fastest, authentic Argon execution)
+      // 2. Execute via Chrome CDP (Fastest, authentic execution)
       let liveSuccess = false;
       try {
-        console.log(`[StreamHandler] Routing prompt to Google Chrome CDP for authentic Argon execution...`);
+        console.log(`[StreamHandler] Routing prompt to Google Chrome CDP for authentic ${activeModelDef.displayName} execution...`);
         const result = await ChromeScreencastService.executeLivePrompt(
           prompt,
           (delta: string) => {
@@ -47,7 +47,7 @@ export class StreamHandler {
               res.write(chunk);
             }
           },
-          DEFAULT_CONFIG.selectedModel || "argon",
+          DEFAULT_CONFIG.selectedModel || "hydrogen",
           DEFAULT_CONFIG.thinkingLevel || "high"
         );
 
@@ -58,7 +58,7 @@ export class StreamHandler {
         }
 
         HistoryStore.add({
-          model: `Gemini 4 Argon (${result.activeModel || "High Thinking"})`,
+          model: `${activeModelDef.displayName} (${result.activeModel || "High Thinking"})`,
           thinkingLevel: DEFAULT_CONFIG.thinkingLevel || "High",
           prompt: prompt,
           response: result.response,
@@ -76,7 +76,7 @@ export class StreamHandler {
             }
           });
           HistoryStore.add({
-            model: "Gemini 4 Argon (Electron Fallback)",
+            model: `${activeModelDef.displayName} (Electron Fallback)`,
             thinkingLevel: DEFAULT_CONFIG.thinkingLevel || "High",
             prompt: prompt,
             response: result.response,

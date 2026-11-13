@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Direct Gemini 4 Argon Web Runner for Google Antigravity
+ * Direct Gemini 4 Hydrogen / Argon Web Runner for Google Antigravity
  * Exclusively routes prompts through authenticated Google Gemini Web (gemini.google.com)
  * Uses direct Chrome CDP WebSocket connection for instant (<100ms) injection via Quill,
- * genuine Gemini 4 Argon execution with High Thinking compute, and adaptive 100ms live streaming.
+ * genuine Gemini 4 execution with High Thinking compute, and adaptive 100ms live streaming.
  */
 
 const fs = require("fs");
@@ -16,7 +16,7 @@ const SESSION_FILE = path.resolve(process.env.HARNESS_ROOT || path.resolve(__dir
 function parseArgs() {
   const args = process.argv.slice(2);
   const options = {
-    model: "argon",
+    model: "hydrogen",
     thinkingLevel: "high",
     prompt: "",
     promptFile: "",
@@ -94,56 +94,89 @@ function checkSession() {
 
 async function getGeminiWsUrl() {
   const hosts = ["[::1]", "127.0.0.1", "localhost"];
-  for (const host of hosts) {
-    try {
-      const list = await new Promise((resolve) => {
-        const req = http.get(`http://${host}:9222/json`, { timeout: 1500 }, (res) => {
-          let body = "";
-          res.on("data", (c) => (body += c));
-          res.on("end", () => {
-            try {
-              resolve(JSON.parse(body));
-            } catch {
-              resolve([]);
-            }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    for (const host of hosts) {
+      try {
+        const list = await new Promise((resolve) => {
+          const req = http.get(`http://${host}:9222/json`, { timeout: 1500 }, (res) => {
+            let body = "";
+            res.on("data", (c) => (body += c));
+            res.on("end", () => {
+              try {
+                resolve(JSON.parse(body));
+              } catch {
+                resolve([]);
+              }
+            });
+          });
+          req.on("error", () => resolve([]));
+          req.on("timeout", () => {
+            req.destroy();
+            resolve([]);
           });
         });
-        req.on("error", () => resolve([]));
-        req.on("timeout", () => {
-          req.destroy();
-          resolve([]);
-        });
-      });
 
-      if (Array.isArray(list) && list.length > 0) {
-        const geminiTab = list.find(
-          (t) => t.type === "page" && t.url && t.url.includes("gemini.google.com")
-        );
-        if (geminiTab && geminiTab.webSocketDebuggerUrl) {
-          return geminiTab.webSocketDebuggerUrl;
+        if (Array.isArray(list) && list.length > 0) {
+          const geminiTab = list.find(
+            (t) => t.type === "page" && t.url && t.url.includes("gemini.google.com")
+          );
+          if (geminiTab && geminiTab.webSocketDebuggerUrl) {
+            return geminiTab.webSocketDebuggerUrl;
+          }
         }
+      } catch {}
+    }
+
+    if (attempt === 0) {
+      console.log("[Chrome CDP] Gemini page not detected on port 9222. Auto-launching Google Chrome with remote debugging...");
+      try {
+        const { spawn } = require("child_process");
+        const profileDir = path.resolve(process.env.HARNESS_ROOT || path.resolve(__dirname, ".."), ".chrome-profile");
+        const chromeExe = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+        const child = spawn(chromeExe, [
+          "--remote-debugging-port=9222",
+          `--user-data-dir=${profileDir}`,
+          "--no-first-run",
+          "--no-default-browser-check",
+          "--disable-background-timer-throttling",
+          "--disable-renderer-backgrounding",
+          "https://gemini.google.com/app"
+        ], { detached: true, stdio: "ignore" });
+        child.unref();
+        await new Promise((r) => setTimeout(r, 3000));
+      } catch (err) {
+        console.warn("[Chrome CDP] Could not auto-launch Chrome:", err.message);
       }
-    } catch {}
+    }
   }
   return null;
 }
 
-function sendWs(ws, method, params = {}) {
+let globalCdpSeq = 1;
+function sendWs(ws, method, params = {}, timeoutMs = 30000) {
   return new Promise((resolve) => {
     if (!ws || ws.readyState !== 1) {
       resolve(null);
       return;
     }
-    const id = Math.floor(Math.random() * 1000000);
+    const id = globalCdpSeq++;
+    let timer = null;
     const handler = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.id === id) {
+          if (timer) clearTimeout(timer);
           ws.removeEventListener("message", handler);
           resolve(data.result);
         }
       } catch {}
     };
+    timer = setTimeout(() => {
+      try {
+        ws.removeEventListener("message", handler);
+      } catch {}
+      resolve(null);
+    }, timeoutMs);
     ws.addEventListener("message", handler);
     ws.send(JSON.stringify({ id, method, params }));
   });
@@ -200,7 +233,7 @@ async function navigateToGeminiChat(ws, targetUrl) {
   }
 }
 
-async function ensureModelSelectedInTab(ws, targetModel = "argon", targetThinking = "high") {
+async function ensureModelSelectedInTab(ws, targetModel = "hydrogen", targetThinking = "high") {
   console.log(`[Chrome CDP] Enforcing model: ${targetModel} (${targetThinking} thinking) in Gemini Web UI...`);
   const res = await sendWs(ws, "Runtime.evaluate", {
     expression: `
@@ -210,17 +243,18 @@ async function ensureModelSelectedInTab(ws, targetModel = "argon", targetThinkin
         if (!modeBtn) return { error: "No mode button" };
 
         const currentText = (modeBtn.innerText || '').toLowerCase();
-        const targetM = (targetModel || 'argon').toLowerCase();
+        const targetM = (targetModel || 'hydrogen').toLowerCase();
         const targetT = (targetThinking || 'high').toLowerCase();
 
-        const modelMatches = targetM.includes('argon') ? currentText.includes('argon') :
+        const modelMatches = targetM.includes('hydrogen') ? (currentText.includes('hydrogen') || currentText.includes('everyday help')) :
+                             targetM.includes('argon') ? currentText.includes('argon') :
                              targetM.includes('pro') ? currentText.includes('pro') :
                              targetM.includes('flash-lite') || targetM.includes('lite') ? currentText.includes('lite') :
                              targetM.includes('flash') ? (currentText.includes('flash') && !currentText.includes('lite')) : true;
 
-        const thinkingMatches = targetT === 'high' ? currentText.includes('high') :
-                                targetT === 'medium' ? currentText.includes('medium') :
-                                targetT === 'low' ? currentText.includes('low') : true;
+        const thinkingMatches = targetT === 'high' ? (currentText.includes('high') || currentText.includes('extra thorough')) :
+                                targetT === 'medium' ? (currentText.includes('medium') || currentText.includes('balanced')) :
+                                targetT === 'low' ? (currentText.includes('low') || currentText.includes('fast')) : true;
 
         if (modelMatches && thinkingMatches) {
           return { alreadySelected: true, text: modeBtn.innerText.trim() };
@@ -233,7 +267,8 @@ async function ensureModelSelectedInTab(ws, targetModel = "argon", targetThinkin
         const modelOption = items.find(el => {
           const txt = (el.innerText || '').toLowerCase();
           const tid = (el.getAttribute('data-test-id') || '').toLowerCase();
-          if (targetM.includes('argon')) return tid.includes('95a4c0abcba24364') || txt.includes('argon');
+          if (targetM.includes('hydrogen')) return tid.includes('56fdd199312815e2') || txt.includes('hydrogen') || txt.includes('everyday help');
+          if (targetM.includes('argon')) return tid.includes('argon') || tid.includes('95a4c0abcba24364') || txt.includes('argon');
           if (targetM.includes('pro')) return tid.includes('e6fa609c3fa255c0') || txt.includes('3.1 pro') || txt.includes('pro');
           if (targetM.includes('flash-lite') || targetM.includes('lite')) return tid.includes('8c46e95b1a07cecc') || txt.includes('flash-lite');
           if (targetM.includes('flash')) return tid.includes('56fdd199312815e2') || (txt.includes('3.8 flash') && !txt.includes('lite'));
@@ -292,7 +327,8 @@ async function ensureModelSelectedInTab(ws, targetModel = "argon", targetThinkin
 
         // Post-selection verification to ensure model switched and did not silently stay on fallback
         const finalBtnText = (modeBtn.innerText || '').toLowerCase();
-        const finalMatches = targetM.includes('argon') ? finalBtnText.includes('argon') :
+        const finalMatches = targetM.includes('hydrogen') ? (finalBtnText.includes('hydrogen') || finalBtnText.includes('everyday help')) :
+                             targetM.includes('argon') ? finalBtnText.includes('argon') :
                              targetM.includes('pro') ? finalBtnText.includes('pro') :
                              targetM.includes('flash-lite') || targetM.includes('lite') ? finalBtnText.includes('lite') :
                              targetM.includes('flash') ? (finalBtnText.includes('flash') && !finalBtnText.includes('lite')) : true;
@@ -315,7 +351,7 @@ async function ensureModelSelectedInTab(ws, targetModel = "argon", targetThinkin
   if (state?.rateLimited) {
     console.warn(`[Chrome CDP] ⚠️ Quota limit detected on ${targetModel}: "${state.resetInfo}"`);
   } else {
-    console.log(`[Chrome CDP] Active model confirmed: ${state?.text || "Argon High"}`);
+    console.log(`[Chrome CDP] Active model confirmed: ${state?.text || `${targetModel} High`}`);
   }
   return state;
 }
@@ -348,8 +384,8 @@ async function executeViaDirectCdp(promptText, options) {
     await navigateToGeminiChat(ws, existingSession.geminiUrl);
   }
 
-  // 2. Ensure Argon High Thinking is active in UI
-  let modelState = await ensureModelSelectedInTab(ws, options.model || "argon", options.thinkingLevel || "high");
+  // 2. Ensure Gemini 4 Hydrogen (High Thinking) is active in UI
+  let modelState = await ensureModelSelectedInTab(ws, options.model || "hydrogen", options.thinkingLevel || "high");
   if (modelState?.rateLimited) {
     const { AccountRotator } = require("../dist/bridge/account-rotator");
     await AccountRotator.syncFromActiveTab((m, p) => sendWs(ws, m, p));
@@ -366,7 +402,7 @@ async function executeViaDirectCdp(promptText, options) {
       console.log(`[Chrome CDP] 🚀 Rotating to Account Slot #${nextAccount.slot}: ${nextAccount.url}...`);
       const switchRes = await AccountRotator.switchToSlot((m, p) => sendWs(ws, m, p), nextAccount.slot);
       if (switchRes.success) {
-        modelState = await ensureModelSelectedInTab(ws, options.model || "argon", options.thinkingLevel || "high");
+        modelState = await ensureModelSelectedInTab(ws, options.model || "hydrogen", options.thinkingLevel || "high");
       } else {
         console.warn(`[Chrome CDP] Failed to switch to slot #${nextAccount.slot}: ${switchRes.error}`);
         break;
@@ -523,7 +559,7 @@ async function main() {
     console.log(`Session File:    ${SESSION_FILE}`);
     console.log(`Cookies Count:   ${session.cookies.length} active cookies`);
     console.log(`CSRF Token:      ${session.snlm0e.substring(0, 20)}...`);
-    console.log(`Default Model:   Gemini 4 Argon (Web Frontier Reasoning)`);
+    console.log(`Default Model:   Gemini 4 Hydrogen (Everyday Help & High Thinking)`);
     console.log(`Thinking Mode:   High Thinking Effort (Enforced in Chrome UI)`);
     console.log(`Execution Mode:  Exclusive Live Webview (CDP Chrome Automation)`);
     console.log(`Cost:            $0.00 (Unlimited Pro Web Session)`);
@@ -591,7 +627,7 @@ async function main() {
       treeOverview,
       maxTurns: options.maxTurns,
       uploadZip: options.uploadZip,
-      model: options.model || "argon",
+      model: options.model || "hydrogen",
       thinkingLevel: options.thinkingLevel || "high",
     });
 
@@ -606,7 +642,7 @@ async function main() {
     if (options.outputFile && agentResult.finalResponse) {
       try {
         fs.writeFileSync(options.outputFile, agentResult.finalResponse, "utf8");
-        console.log(`\n[Saved complete Argon response to: ${options.outputFile}]`);
+        console.log(`\n[Saved complete response to: ${options.outputFile}]`);
       } catch (err) {
         console.error(`\n[Failed to write output file]: ${err.message}`);
       }
@@ -658,7 +694,7 @@ async function main() {
   if (options.outputFile && responseText) {
     try {
       fs.writeFileSync(options.outputFile, responseText, "utf8");
-      console.log(`\n[Saved complete Argon response to: ${options.outputFile}]`);
+      console.log(`\n[Saved complete response to: ${options.outputFile}]`);
     } catch (err) {
       console.error(`\n[Failed to write output file]: ${err.message}`);
     }

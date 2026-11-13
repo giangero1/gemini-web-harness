@@ -35,7 +35,7 @@ export class AgentLoop {
     },
     {
       name: "write_file",
-      description: "Writes or overwrites a local workspace file safely, creating backups in .argon_backups/.",
+      description: "Writes or overwrites a local workspace file safely, creating backups in the active backups directory.",
       parameters: {
         type: "object",
         properties: {
@@ -167,18 +167,25 @@ export class AgentLoop {
     const filesModified: string[] = [];
     const filesRead: string[] = [];
 
-    const sendWs = (method: string, params: any = {}): Promise<any> => {
+    let cdpSeq = 1;
+    const sendWs = (method: string, params: any = {}, timeoutMs: number = 30000): Promise<any> => {
       return new Promise((resolve) => {
-        const id = Math.floor(Math.random() * 1000000);
+        const id = cdpSeq++;
+        let timer: NodeJS.Timeout | null = null;
         const handler = (data: WebSocket.RawData) => {
           try {
             const msg = JSON.parse(data.toString());
             if (msg.id === id) {
+              if (timer) clearTimeout(timer);
               ws.removeListener("message", handler);
               resolve(msg.result);
             }
           } catch {}
         };
+        timer = setTimeout(() => {
+          ws.removeListener("message", handler);
+          resolve(null);
+        }, timeoutMs);
         ws.on("message", handler);
         ws.send(JSON.stringify({ id, method, params }));
       });
@@ -194,7 +201,7 @@ export class AgentLoop {
     }
 
     // Enforce target model and thinking effort in Chrome UI
-    const targetModel = options.model || "argon";
+    const targetModel = options.model || "hydrogen";
     const targetThinking = options.thinkingLevel || "high";
     console.log(`[AgentLoop] Enforcing active mode: ${targetModel} (${targetThinking} thinking) in Chrome UI...`);
     let modelState = await this.ensureModelSelected(sendWs, targetModel, targetThinking);
@@ -237,7 +244,7 @@ export class AgentLoop {
 
     while (turn < maxTurns) {
       turn++;
-      console.log(`\n[AgentLoop] Turn ${turn}/${maxTurns} dispatched to Gemini 4 Argon Web...`);
+      console.log(`\n[AgentLoop] Turn ${turn}/${maxTurns} dispatched to Gemini 4 Hydrogen Web...`);
 
       // 1. Record existing response count
       const countRes = await sendWs("Runtime.evaluate", {
@@ -378,49 +385,57 @@ export class AgentLoop {
         }
       }
 
-      // 5. Check if the turn output contains a function_call block
-      const call = this.extractToolCall(currentText);
-      if (call) {
-        options.onToolCall?.(call.name, call.args);
-        console.log(`\n⚙️ [Local Tool Execution] Calling: ${call.name}(${JSON.stringify(call.args)})`);
+      // 5. Check if the turn output contains one or more function_call blocks
+      const calls = this.extractAllToolCalls(currentText);
+      if (calls.length > 0) {
+        const observationParts: string[] = [];
+        for (let i = 0; i < calls.length; i++) {
+          const call = calls[i];
+          const prefix = calls.length > 1 ? `[${i + 1}/${calls.length}] ` : "";
+          options.onToolCall?.(call.name, call.args);
+          console.log(`\n⚙️ [Local Tool Execution] ${prefix}Calling: ${call.name}(${JSON.stringify(call.args)})`);
 
-        let result: ToolResult;
-        if (call.name === "read_file") {
-          result = ToolExecutor.readFile(call.args.filePath, call.args.startLine, call.args.endLine);
-          if (result.success && !filesRead.includes(call.args.filePath)) {
-            filesRead.push(call.args.filePath);
+          let result: ToolResult;
+          if (call.name === "read_file") {
+            result = ToolExecutor.readFile(call.args.filePath, call.args.startLine, call.args.endLine);
+            if (result.success && !filesRead.includes(call.args.filePath)) {
+              filesRead.push(call.args.filePath);
+            }
+          } else if (call.name === "write_file") {
+            result = ToolExecutor.writeFile(call.args.filePath, call.args.content);
+            if (result.success && !filesModified.includes(call.args.filePath)) {
+              filesModified.push(call.args.filePath);
+            }
+          } else if (call.name === "list_directory") {
+            result = ToolExecutor.listDirectory(call.args.dirPath, call.args.maxDepth);
+          } else if (call.name === "run_command") {
+            result = await ToolExecutor.runCommand(call.args.command);
+          } else {
+            result = { success: false, error: `Unknown tool: ${call.name}` };
           }
-        } else if (call.name === "write_file") {
-          result = ToolExecutor.writeFile(call.args.filePath, call.args.content);
-          if (result.success && !filesModified.includes(call.args.filePath)) {
-            filesModified.push(call.args.filePath);
-          }
-        } else if (call.name === "list_directory") {
-          result = ToolExecutor.listDirectory(call.args.dirPath, call.args.maxDepth);
-        } else if (call.name === "run_command") {
-          result = await ToolExecutor.runCommand(call.args.command);
-        } else {
-          result = { success: false, error: `Unknown tool: ${call.name}` };
+
+          options.onToolResult?.(call.name, result);
+
+          const statusStr = result.success ? "SUCCESS" : "ERROR";
+          console.log(`✅ [Tool Result: ${statusStr}]\n${(result.output || result.error || "").substring(0, 300)}...`);
+
+          const obsContent = result.success ? (result.output || "(Success)").substring(0, 3000) : `Error: ${result.error}`;
+          observationParts.push(`[Tool Observation ${prefix}for ${call.name}]:\n${obsContent}`);
         }
 
-        options.onToolResult?.(call.name, result);
+        lastObservation = observationParts.join("\n\n");
 
-        const statusStr = result.success ? "SUCCESS" : "ERROR";
-        console.log(`✅ [Tool Result: ${statusStr}]\n${(result.output || result.error || "").substring(0, 300)}...`);
-
-        lastObservation = `Tool: ${call.name}\nResult:\n` + (result.success ? (result.output || "(Success)").substring(0, 3000) : `Error: ${result.error}`);
-
-        // Format next prompt turn with observation
+        // Format next prompt turn with aggregated observations
         nextPrompt = [
-          `[Tool Observation for ${call.name}]:`,
-          result.success ? result.output || "(Success)" : `Error: ${result.error}`,
+          lastObservation,
           "",
-          "Continue reasoning with this result. If more tool actions are needed, output the next ```function_call block. Otherwise, provide your complete final response.",
+          "Continue reasoning with these results. If more tool actions are needed, output the next ```function_call block. Otherwise, provide your complete final response.",
         ].join("\n");
       } else {
-        // No more tool calls: Argon reached final answer!
+        // No more tool calls: model reached final answer!
         finalResponse = currentText;
-        console.log(`\n🎉 [Agent Loop Complete] Argon concluded in ${turn} turn(s).`);
+        const modelLabel = (options.model || "hydrogen").toUpperCase();
+        console.log(`\n🎉 [Agent Loop Complete] ${modelLabel} concluded in ${turn} turn(s).`);
         break;
       }
     }
@@ -428,32 +443,82 @@ export class AgentLoop {
     return { finalResponse, turnCount: turn, filesModified };
   }
 
-  private static extractToolCall(text: string): { name: string; args: any } | null {
-    // 1. Try markdown code block ```function_call, ```tool_call, or ```json
-    const codeBlockMatch = text.match(/```(?:function_call|tool_call|json)?\s*([\s\S]*?)```/i);
-    if (codeBlockMatch && codeBlockMatch[1]) {
-      const parsed = this.tryParseToolJson(codeBlockMatch[1]);
-      if (parsed) return parsed;
-    }
+  public static extractAllToolCalls(text: string): Array<{ name: string; args: any }> {
+    const calls: Array<{ name: string; args: any }> = [];
 
-    // 2. Search for any {"name": "...", "args": ...} using balanced bracket extraction
-    const marker = /\{\s*"name"\s*:\s*"([a-zA-Z0-9_-]+)"/g;
-    let m: RegExpExecArray | null;
-    while ((m = marker.exec(text)) !== null) {
-      const startIdx = m.index;
-      const jsonStr = this.extractBalancedJson(text, startIdx);
-      if (jsonStr) {
-        const parsed = this.tryParseToolJson(jsonStr);
-        if (parsed) return parsed;
+    const addCall = (item: any) => {
+      if (item && typeof item === "object" && typeof item.name === "string") {
+        calls.push({
+          name: item.name,
+          args: item.args ?? item.parameters ?? {},
+        });
+      }
+    };
+
+    // 1. Check all markdown code blocks (```function_call, ```tool_call, ```json, etc.)
+    const codeBlockRegex = /```(?:function_call|tool_call|json)?\s*([\s\S]*?)```/gi;
+    let blockMatch: RegExpExecArray | null;
+    while ((blockMatch = codeBlockRegex.exec(text)) !== null) {
+      const blockContent = blockMatch[1].trim();
+      const parsedList = this.tryParseToolJsonList(blockContent);
+      if (parsedList.length > 0) {
+        parsedList.forEach(addCall);
       }
     }
 
-    return null;
+    // 2. If nothing extracted from code blocks, search for raw {"name": "...", "args": ...}
+    if (calls.length === 0) {
+      const marker = /\{\s*"name"\s*:\s*"([a-zA-Z0-9_-]+)"/g;
+      let m: RegExpExecArray | null;
+      while ((m = marker.exec(text)) !== null) {
+        const startIdx = m.index;
+        const jsonStr = this.extractBalancedJson(text, startIdx);
+        if (jsonStr) {
+          const parsed = this.tryParseSingleToolJson(jsonStr);
+          if (parsed) addCall(parsed);
+        }
+      }
+    }
+
+    return calls;
   }
 
-  private static tryParseToolJson(raw: string): { name: string; args: any } | null {
+  public static extractToolCall(text: string): { name: string; args: any } | null {
+    const all = this.extractAllToolCalls(text);
+    return all.length > 0 ? all[0] : null;
+  }
+
+  public static tryParseToolJsonList(raw: string): Array<{ name: string; args: any }> {
+    const results: Array<{ name: string; args: any }> = [];
     try {
-      // Clean duplicate commas (,,) and trailing commas before braces
+      const clean = raw.trim().replace(/,\s*,+/g, ",").replace(/,\s*([}\]])/g, "$1");
+      const parsed = JSON.parse(clean);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (item && item.name && (item.args !== undefined || item.parameters !== undefined)) {
+            results.push({ name: item.name, args: item.args ?? item.parameters ?? {} });
+          }
+        }
+      } else if (parsed && parsed.name && (parsed.args !== undefined || parsed.parameters !== undefined)) {
+        results.push({ name: parsed.name, args: parsed.args ?? parsed.parameters ?? {} });
+      }
+    } catch {
+      // If full block is not a single valid JSON, scan for balanced JSON objects inside it
+      const marker = /\{\s*"name"\s*:\s*"([a-zA-Z0-9_-]+)"/g;
+      let m: RegExpExecArray | null;
+      while ((m = marker.exec(raw)) !== null) {
+        const jsonStr = this.extractBalancedJson(raw, m.index);
+        if (jsonStr) {
+          const single = this.tryParseSingleToolJson(jsonStr);
+          if (single) results.push(single);
+        }
+      }
+    }
+    return results;
+  }
+
+  public static tryParseSingleToolJson(raw: string): { name: string; args: any } | null {
+    try {
       const clean = raw.trim().replace(/,\s*,+/g, ",").replace(/,\s*([}\]])/g, "$1");
       const obj = JSON.parse(clean);
       if (obj.name && (obj.args !== undefined || obj.parameters !== undefined)) {
@@ -497,7 +562,7 @@ export class AgentLoop {
 
   public static async ensureModelSelected(
     sendWs: (method: string, params?: any) => Promise<any>,
-    targetModel: string = "argon",
+    targetModel: string = "hydrogen",
     targetThinking: string = "high"
   ): Promise<any> {
     const res = await sendWs("Runtime.evaluate", {
@@ -508,17 +573,18 @@ export class AgentLoop {
           if (!modeBtn) return { error: "No mode button" };
 
           const currentText = (modeBtn.innerText || '').toLowerCase();
-          const targetM = (targetModel || 'argon').toLowerCase();
+          const targetM = (targetModel || 'hydrogen').toLowerCase();
           const targetT = (targetThinking || 'high').toLowerCase();
 
-          const modelMatches = targetM.includes('argon') ? currentText.includes('argon') :
+          const modelMatches = targetM.includes('hydrogen') ? (currentText.includes('hydrogen') || currentText.includes('everyday help')) :
+                               targetM.includes('argon') ? currentText.includes('argon') :
                                targetM.includes('pro') ? currentText.includes('pro') :
                                targetM.includes('flash-lite') || targetM.includes('lite') ? currentText.includes('lite') :
                                targetM.includes('flash') ? (currentText.includes('flash') && !currentText.includes('lite')) : true;
 
-          const thinkingMatches = targetT === 'high' ? currentText.includes('high') :
-                                  targetT === 'medium' ? currentText.includes('medium') :
-                                  targetT === 'low' ? currentText.includes('low') : true;
+          const thinkingMatches = targetT === 'high' ? (currentText.includes('high') || currentText.includes('extra thorough')) :
+                                  targetT === 'medium' ? (currentText.includes('medium') || currentText.includes('balanced')) :
+                                  targetT === 'low' ? (currentText.includes('low') || currentText.includes('fast')) : true;
 
           if (modelMatches && thinkingMatches) {
             return { alreadySelected: true, text: modeBtn.innerText.trim() };
@@ -531,7 +597,8 @@ export class AgentLoop {
           const modelOption = items.find(el => {
             const txt = (el.innerText || '').toLowerCase();
             const tid = (el.getAttribute('data-test-id') || '').toLowerCase();
-            if (targetM.includes('argon')) return tid.includes('95a4c0abcba24364') || txt.includes('argon');
+            if (targetM.includes('hydrogen')) return tid.includes('56fdd199312815e2') || txt.includes('hydrogen') || txt.includes('everyday help');
+            if (targetM.includes('argon')) return tid.includes('argon') || tid.includes('95a4c0abcba24364') || txt.includes('argon');
             if (targetM.includes('pro')) return tid.includes('e6fa609c3fa255c0') || txt.includes('3.1 pro') || txt.includes('pro');
             if (targetM.includes('flash-lite') || targetM.includes('lite')) return tid.includes('8c46e95b1a07cecc') || txt.includes('flash-lite');
             if (targetM.includes('flash')) return tid.includes('56fdd199312815e2') || (txt.includes('3.8 flash') && !txt.includes('lite'));
@@ -590,7 +657,8 @@ export class AgentLoop {
 
           // Post-selection verification to ensure model switched and did not silently stay on fallback
           const finalBtnText = (modeBtn.innerText || '').toLowerCase();
-          const finalMatches = targetM.includes('argon') ? finalBtnText.includes('argon') :
+          const finalMatches = targetM.includes('hydrogen') ? (finalBtnText.includes('hydrogen') || finalBtnText.includes('everyday help')) :
+                               targetM.includes('argon') ? finalBtnText.includes('argon') :
                                targetM.includes('pro') ? finalBtnText.includes('pro') :
                                targetM.includes('flash-lite') || targetM.includes('lite') ? finalBtnText.includes('lite') :
                                targetM.includes('flash') ? (finalBtnText.includes('flash') && !finalBtnText.includes('lite')) : true;

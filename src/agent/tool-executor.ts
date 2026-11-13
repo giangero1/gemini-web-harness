@@ -10,7 +10,17 @@ export interface ToolResult {
 
 export class ToolExecutor {
   private static workspaceRoot: string = process.cwd();
-  private static backupDirName: string = ".argon_backups";
+  private static backupDirName: string = process.env.HARNESS_BACKUP_DIR || ".hydrogen_backups";
+
+  public static setBackupDirName(name: string): void {
+    if (name && name.trim()) {
+      this.backupDirName = name.trim();
+    }
+  }
+
+  public static getBackupDirName(): string {
+    return this.backupDirName;
+  }
 
   private static allowedCommands = [
     "git",
@@ -217,6 +227,15 @@ export class ToolExecutor {
         return;
       }
 
+      // Block dangerous shell operators: chaining (&, &&, ;), piping (|, ||), redirection (>, >>, <), caret escapes (^), newlines (\r, \n), subshells (`, $())
+      if (/([&|;><^`\r\n]|\$\()/.test(trimmed)) {
+        resolve({
+          success: false,
+          error: `Security Error: Command chaining, redirection, or subshell operators (&, |, ;, >, <, ^, newlines) are disabled for safety: "${trimmed}"`,
+        });
+        return;
+      }
+
       exec(
         trimmed,
         {
@@ -250,10 +269,12 @@ export class ToolExecutor {
   }
 
   private static resolvePath(p: string): string {
-    if (path.isAbsolute(p)) {
-      return path.resolve(p);
+    const resolved = path.isAbsolute(p) ? path.resolve(p) : path.resolve(this.workspaceRoot, p);
+    const rel = path.relative(this.workspaceRoot, resolved);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+      throw new Error(`Security Error: Access denied. Path '${p}' escapes workspace boundary.`);
     }
-    return path.resolve(this.workspaceRoot, p);
+    return resolved;
   }
 
   private static createBackup(targetFile: string): void {

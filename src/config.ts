@@ -18,6 +18,14 @@ export interface ModelDefinition {
 
 // Live models verified directly from Gemini Web
 export const MODELS: Record<string, ModelDefinition> = {
+  "gemini-4-hydrogen": {
+    id: "gemini-4-hydrogen",
+    displayName: "Gemini 4 Hydrogen",
+    webCategory: 9,
+    description: "Google DeepMind's Gemini 4 Hydrogen model with High Thinking compute for everyday coding and agile tasks",
+    supportsThinking: true,
+    contextWindow: 1_000_000,
+  },
   "gemini-4-argon": {
     id: "gemini-4-argon",
     displayName: "Gemini 4 Argon",
@@ -62,7 +70,7 @@ export const THINKING_LEVEL_MAP: Record<"low" | "medium" | "high", number> = {
 export const DEFAULT_CONFIG: HarnessConfig = {
   port: 8046,
   host: "127.0.0.1",
-  selectedModel: "gemini-4-argon",
+  selectedModel: "gemini-4-hydrogen",
   thinkingLevel: "high",
   pacingDelayMs: 350,
   temporaryChats: false,
