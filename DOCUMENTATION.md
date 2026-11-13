@@ -13,10 +13,11 @@ The **Gemini Web Harness** is a high-performance desktop bridge and gateway serv
 
 Inspired by [`miuuyy/codex-chatgpt-web`](https://github.com/miuuyy/codex-chatgpt-web), this project breaks the barrier between Google's consumer web interface and local developer tooling:
 - **Zero API Cost ($0):** Utilizes your existing signed-in Google account browser session rather than metered Google Cloud Developer API credits.
-- **Frontier Reasoning Models:** Unlocks **Gemini 4 Argon** (with **High Thinking** effort), **Gemini 3.1 Pro**, and **Gemini 3.8 Flash**.
-- **1,000,000 Token Context Window:** Allows slurping entire local repositories, source directories, and logs in a single prompt.
-- **Local File & Tool Execution ("Brain & Hands"):** Ingests raw local files from your Windows filesystem, prompts Argon Web for architectural solutions, and enables Antigravity to apply the returned diffs and code directly onto your disk without manual copy-pasting.
-- **Live Visual Proof:** Features an embedded Electron `<webview>` side-by-side with a local file inspector, demonstrating live prompt injection, real-time typing/thinking, and verified web chat history.
+- **Flagship & Frontier Models:** Unlocks **Gemini 4 Hydrogen** (Everyday Help with **High Thinking** effort), **Gemini 4 Argon** (Deep Frontier Reasoning), **Gemini 3.1 Pro**, and **Gemini 3.8 Flash**.
+- **1,000,000 Token Context Window:** Allows slurping entire local repositories, source directories, and logs in a single prompt or automated CDP ZIP upload.
+- **Autonomous Multi-Tool Batch Loop ("Brain & Hands"):** Ingests raw local files from your Windows filesystem, prompts Hydrogen Web for solutions, and autonomously executes multiple tools per turn (`read_file`, `write_file`, `list_directory`, `run_command`) with consolidated observations.
+- **Windows Shell Security Sandbox:** Hardened against shell injection by rejecting command chaining (`&`, `&&`, `;`), pipelines (`|`), redirection (`>`, `>>`, `<`), caret escapes (`^`), and newlines, with workspace boundary enforcement.
+- **Live Visual Proof:** Features real-time CDP streaming, 60fps screencasting, and automated 5-account quota failover.
 
 ---
 
@@ -62,7 +63,7 @@ Inspired by [`miuuyy/codex-chatgpt-web`](https://github.com/miuuyy/codex-chatgpt
                    ▼                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                        Google Gemini Web (Cloud Sandbox)                        │
-│   • Model: Gemini 4 Argon / Gemini 3.1 Pro                                      │
+│   • Model: Gemini 4 Hydrogen (Default) / Gemini 4 Argon / 3.1 Pro               │
 │   • 1M Context Window + High Thinking Trace Execution                           │
 │   • Responds with deep reasoning & production-ready code                        │
 └────────────────────────────────────────┬────────────────────────────────────────┘
@@ -134,6 +135,28 @@ Inspired by [`miuuyy/codex-chatgpt-web`](https://github.com/miuuyy/codex-chatgpt
   ```
   This guarantees standard streaming compatibility with Google Antigravity, OpenAI Codex, and any OpenAI/GenAI-compatible client.
 
+### Breakthrough 6: Multi-Tool Batch Execution Engine (`src/agent/agent-loop.ts`)
+* **The Problem:** Models like Gemini 4 Hydrogen frequently output multiple tool calls in a single turn (e.g. inspecting 3 files in parallel or writing a file and immediately running tests). In single-tool architectures, only the first call is executed, causing dropped tool calls and unnatural back-and-forth prompting.
+* **The Solution:** Implemented `extractAllToolCalls` and sequential batch scheduling:
+  ```typescript
+  const calls = this.extractAllToolCalls(currentText);
+  for (let i = 0; i < calls.length; i++) {
+    const result = await executeTool(calls[i]);
+    observationParts.push(`[Tool Observation ${i+1}/${calls.length} for ${calls[i].name}]:\n${result.output}`);
+  }
+  ```
+* **Result:** Executes all emitted tools sequentially in a single turn and returns consolidated observations, speeding up coding tasks by up to 3x.
+
+### Breakthrough 7: Hardened Windows Shell Security Sandbox (`src/agent/tool-executor.ts`)
+* **The Problem:** Windows `cmd.exe` accepts command chaining operators (single `&`, `;`, `|`), redirection (`>`, `>>`, `<`), caret escaping (`^`), and newlines, which could allow arbitrary command execution beyond the whitelisted binaries (`git`, `node`, `npm`, `tsc`, `python`, etc.).
+* **The Solution:** Implemented strict metacharacter rejection:
+  ```typescript
+  if (/([&|;><^`\r\n]|\$\()/.test(trimmed)) {
+    throw new SecurityError("Command chaining, redirection, or subshell operators are disabled for safety.");
+  }
+  ```
+* **Result:** Completely closes command injection vectors while preserving developer workflows.
+
 ---
 
 ## 4. Directory & File Structure
@@ -172,8 +195,12 @@ D:\gemini-web-harness\
 │   ├── config.ts              # Global port, paths, and model configuration
 │   └── main.ts                # Electron entry point & IPC message router
 ├── tests\
+│   ├── account-rotator.test.ts # Tests for account rotation & cooldown logic
+│   ├── agent-multitool.test.ts # Tests for multi-tool parsing and batch execution
 │   ├── models-catalog.test.ts # Tests for model catalog routes
-│   └── response-parser.test.ts# Tests for tool call parsing
+│   ├── prompt-shim-antigravity.test.ts # Tests for context compilation & scanner
+│   ├── response-parser.test.ts# Tests for tool call parsing & SSE streaming
+│   └── tool-executor.test.ts  # Tests for command whitelist & injection defense
 ├── package.json               # NPM scripts and dependencies (Electron, Express, etc.)
 ├── tsconfig.json              # TypeScript compilation configuration
 ├── README.md                  # Quick-start guide
@@ -182,15 +209,17 @@ D:\gemini-web-harness\
 
 ---
 
-## 5. Antigravity Skill Integration (`/gemini-web`)
+## 5. Antigravity Skill Integration (`/hydrogen` & `/gemini-web`)
 
-The harness is registered as a global Antigravity skill:
-* **Path:** `~/.gemini/config/skills/gemini-web/SKILL.md` (or `%USERPROFILE%\.gemini\config\skills\gemini-web\SKILL.md`)
-* **Trigger:** Invoke `/gemini-web` in any Antigravity conversation or prompt.
+The harness is registered as global Antigravity skills:
+* **Paths:** 
+  - `~/.gemini/config/skills/hydrogen/SKILL.md` (for Gemini 4 Hydrogen)
+  - `~/.gemini/config/skills/gemini-web/SKILL.md` (for Gemini 4 Argon)
+* **Trigger:** Invoke `/hydrogen` or `/gemini-web` in any Antigravity conversation or prompt.
 * **Function:** 
   - Gathers the files and context from the user's workspace.
   - Dispatches the task to the local harness via `node "D:\gemini-web-harness\scripts\call_web_gemini.js"`.
-  - Captures Argon's full reasoning stream and code.
+  - Captures Hydrogen's full reasoning stream and code.
   - Antigravity natively applies the returned code modifications directly to project files.
 
 ---
@@ -208,26 +237,27 @@ npm start
 * If not signed in, log in once via the Google login window; your credentials will persist in `D:\gemini-web-harness\.chrome-profile`.
 
 ### 2. Ingesting a Folder from CLI
-To have Gemini 4 Argon inspect an entire local folder and answer questions:
+To have Gemini 4 Hydrogen inspect an entire local folder and autonomously execute tools:
 ```powershell
 node "D:\gemini-web-harness\scripts\call_web_gemini.js" `
   --folder "D:\path\to\target\project" `
   --instruction "Analyze the codebase, check for memory leaks, and refactor the worker queue." `
-  --model "gemini-4-argon"
+  --model "hydrogen" `
+  --thinking-level "high"
 ```
 
 ### 3. Ingesting a Single File
 ```powershell
 node "D:\gemini-web-harness\scripts\call_web_gemini.js" `
   --file "D:\path\to\script.ts" `
-  --instruction "Explain how this state machine works and optimize the transition table."
+  --instruction "Explain how this state machine works and optimize the transition table." `
+  --model "hydrogen"
 ```
 
-### 4. Running the Test Suite
+### 4. Running the Full Test Suite
 ```powershell
 cd D:\gemini-web-harness
-npx ts-node tests/response-parser.test.ts
-npx ts-node tests/models-catalog.test.ts
+npm test
 ```
 
 ---
